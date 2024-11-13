@@ -5,7 +5,7 @@ import os
 import json
 import warnings
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 from crewai import Agent, Task, Crew, Process
 from docx import Document
 from docx.shared import Pt, RGBColor
@@ -45,9 +45,19 @@ if uploaded_files:
     file_names = [file.name for file in uploaded_files]
     st.write("Uploaded Files:", ", ".join(file_names))
 
-# Date range selectors for filtering files by date
-start_date = st.date_input("Select Start Date")
-end_date = st.date_input("Select End Date")
+# Checkbox to include all documents by automatically setting the date range
+include_all_docs = st.checkbox("Include all documents")
+
+# Date range selectors
+if include_all_docs:
+    # Automatically set date range to 100 years before today to today
+    start_date = datetime.now() - timedelta(days=365 * 100)
+    end_date = datetime.now()
+    st.write(f"Automatically including documents from {start_date.date()} to {end_date.date()}")
+else:
+    # Allow manual date selection
+    start_date = st.date_input("Select Start Date")
+    end_date = st.date_input("Select End Date")
 
 # API Key input
 openai_api_key = st.text_input("Enter your OpenAI API Key", type="password")
@@ -55,7 +65,7 @@ openai_api_key = st.text_input("Enter your OpenAI API Key", type="password")
 # Temperature slider
 temperature = st.slider("Set the temperature for the output (0 = deterministic, 1 = creative)", min_value=0.0, max_value=1.0, value=0.7)
 
-# Define prompts for agents and tasks
+# Define prompts for agents and tasks, hidden from the front end
 if 'prompts' not in st.session_state:
     st.session_state['prompts'] = config or {
         "planner": {
@@ -66,7 +76,8 @@ if 'prompts' not in st.session_state:
                 "and opportunities discussed by industry leaders. Categorize the insights into major "
                 "sections, such as Industry Trends, Technological Impacts, Regulatory Considerations, and Future Outlook. "
                 "Use participant quotes strategically to add credibility and depth, ensuring you include specific examples "
-                "from relevant companies where applicable. "
+                "from relevant companies where applicable. Only use the data mentioned in the eligible files "
+                "for report generation and do not incorporate any outside knowledge. "
                 "Ensure the report reads naturally and has the polished "
                 "feel of a human-written document, with varied sentence structures, a professional tone, and engaging, nuanced language."
             )
@@ -84,7 +95,8 @@ if 'prompts' not in st.session_state:
                 "is actionable. Write in a way that feels human and natural, as though crafted by a seasoned technical "
                 "writer. Avoid robotic language and ensure the narrative is engaging, relatable, and enriched with "
                 "cross-references that connect different sections of the report for a cohesive flow. "
-                "End the article with a final 'Conclusion' section, which summarizes key insights without adding further suggestions or recommendations."
+                "End the article with a final 'Conclusion' section, which summarizes key insights without adding further suggestions or recommendations. "
+                "Only use the data mentioned in the eligible files for report generation and do not incorporate any outside knowledge."
             )
         },
         "editor": {
@@ -97,7 +109,8 @@ if 'prompts' not in st.session_state:
                 "controversial statements unless necessary, and ensure the report addresses both benefits and risks. "
                 "Focus on coherence, readability, and the logical flow of ideas. Make sure there is no content or "
                 "additional sections following the Conclusion. The Conclusion should be the final part of the report, "
-                "summarizing key insights without adding any further recommendations or suggestions."
+                "summarizing key insights without adding any further recommendations or suggestions. "
+                "Only use the data mentioned in the eligible files for report generation and do not incorporate any outside knowledge."
             )
         },
         "tasks": {
@@ -118,16 +131,7 @@ if 'prompts' not in st.session_state:
         }
     }
 
-# User inputs for each prompt
-st.header("Agent Prompts")
-
-for agent, prompts in st.session_state['prompts'].items():
-    if agent != "tasks":
-        st.subheader(f"{agent.capitalize()} Agent")
-        prompts["role"] = st.text_input(f"{agent.capitalize()} Role", value=prompts["role"], key=f"{agent}_role")
-        prompts["goal"] = st.text_area(f"{agent.capitalize()} Goal", value=prompts["goal"], key=f"{agent}_goal")
-        prompts["backstory"] = st.text_area(f"{agent.capitalize()} Backstory", value=prompts["backstory"], key=f"{agent}_backstory")
-
+# Task Descriptions UI (excluding agent roles)
 st.header("Task Descriptions")
 for task, description in st.session_state['prompts']["tasks"].items():
     st.session_state['prompts']["tasks"][task] = st.text_area(f"{task.capitalize()} Task Description", value=description, key=f"{task}_description")
@@ -152,7 +156,7 @@ if st.button("Generate Research Article"):
             file_date_str = uploaded_file.name.split("_")[0]
             try:
                 file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
-                if start_date <= file_date <= end_date:
+                if start_date.date() <= file_date <= end_date.date():
                     # Read content based on file type
                     if uploaded_file.type == "text/plain":
                         file_content = uploaded_file.read().decode("utf-8")
