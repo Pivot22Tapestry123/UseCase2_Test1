@@ -9,6 +9,7 @@ from datetime import datetime
 from crewai import Agent, Task, Crew, Process
 from docx import Document
 from docx.shared import Pt, RGBColor
+from docx import Document as DocxDocument  # Import for reading Word documents
 
 # Suppress warnings
 warnings.filterwarnings('ignore')
@@ -25,14 +26,19 @@ def save_config(config):
     with open("agent_task_config.json", "w") as f:
         json.dump(config, f)
 
+# Function to read content from a Word document
+def read_docx(file):
+    doc = DocxDocument(file)
+    return "\n".join([paragraph.text for paragraph in doc.paragraphs])
+
 # Load persisted configurations at startup
 config = load_config()
 
 # Streamlit UI
 st.title("Research Article Generator")
 
-# File uploader
-uploaded_files = st.file_uploader("Upload one or more transcript files", type="txt", accept_multiple_files=True)
+# File uploader to accept both .txt and .docx files
+uploaded_files = st.file_uploader("Upload one or more transcript files (TXT or Word)", type=["txt", "docx"], accept_multiple_files=True)
 
 # Display file names
 if uploaded_files:
@@ -147,10 +153,15 @@ if st.button("Generate Research Article"):
             try:
                 file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
                 if start_date <= file_date <= end_date:
-                    file_content = uploaded_file.read().decode("utf-8")
+                    # Read content based on file type
+                    if uploaded_file.type == "text/plain":
+                        file_content = uploaded_file.read().decode("utf-8")
+                    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                        file_content = read_docx(uploaded_file)
+
                     st.write(f"Processing file: {uploaded_file.name}")
 
-                    # Define agents and tasks for extracting sections
+                    # Define agents and tasks for processing content
                     planner = Agent(
                         role=st.session_state['prompts']['planner']['role'],
                         goal=st.session_state['prompts']['planner']['goal'],
@@ -160,17 +171,17 @@ if st.button("Generate Research Article"):
                         temperature=temperature
                     )
 
-                    for section_name in ["Introduction", "Core Insights", "Challenges", "Opportunities", "Conclusion"]:
-                        task = Task(
-                            description=st.session_state['prompts']['tasks']['plan'],
-                            agent=planner,
-                            inputs=[file_content],  # Assuming `Task` can accept `inputs` directly here
-                            expected_output=f"A comprehensive '{section_name}' section."
-                        )
+                    # Define a single task for content planning
+                    task = Task(
+                        description=st.session_state['prompts']['tasks']['plan'],
+                        agent=planner,
+                        inputs=[file_content],
+                        expected_output="A comprehensive article based on the provided transcripts."
+                    )
 
-                        crew = Crew(agents=[planner], tasks=[task], verbose=True)
-                        with st.spinner(f"Extracting '{section_name}' from {uploaded_file.name}..."):
-                            result = crew.kickoff()  # Removed `inputs` parameter from kickoff
+                    crew = Crew(agents=[planner], tasks=[task], verbose=True)
+                    with st.spinner(f"Processing {uploaded_file.name}..."):
+                        result = crew.kickoff()
 
                 else:
                     st.write(f"Skipped file (out of date range): {uploaded_file.name}")
@@ -208,20 +219,14 @@ if st.button("Generate Research Article"):
         for section in doc_sections:
             section.left_margin = section.right_margin = section.top_margin = section.bottom_margin = Pt(72)  # 1 inch margin
 
-        # Add content with navy blue color for subheadings
+        # Add content to the document
         doc.add_paragraph("Industry Insights Report", style='Heading 1')
         
         for line in final_report.split('\n'):
             clean_line = line.strip('*')  # Remove asterisks from each line
-            if any(section in clean_line for section in ["Introduction", "Core Insights", "Challenges", "Opportunities", "Conclusion"]):  # Check if the line is a subheading
-                p = doc.add_paragraph(clean_line)
-                p.style.font.name = 'Times New Roman'
-                p.style.font.size = Pt(11)
-                p.runs[0].font.color.rgb = RGBColor(0, 0, 128)  # Navy blue color for subheadings
-            else:
-                p = doc.add_paragraph(clean_line)
-                p.style.font.name = 'Times New Roman'
-                p.style.font.size = Pt(11)
+            p = doc.add_paragraph(clean_line)
+            p.style.font.name = 'Times New Roman'
+            p.style.font.size = Pt(11)
             p.paragraph_format.alignment = 0  # Left align
             p.paragraph_format.space_after = Pt(0)
             p.paragraph_format.line_spacing = 1  # Single line spacing
