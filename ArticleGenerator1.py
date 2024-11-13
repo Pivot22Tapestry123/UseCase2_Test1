@@ -59,7 +59,7 @@ st.markdown(
 )
 
 # Display the company logo in the top left corner
-st.image("assets/logo.png", width=150, output_format="PNG")
+st.image("assets/logo.png", width=100, output_format="PNG")  # Adjust path as needed
 
 # Concise instructions for naming files
 st.write(
@@ -86,9 +86,9 @@ if include_all_docs:
     end_date = datetime.now().date()  # Convert to date
     st.write(f"Automatically including documents from {start_date} to {end_date}")
 else:
-    # Allow manual date selection
-    start_date = st.date_input("Select Start Date").date()  # Convert to date
-    end_date = st.date_input("Select End Date").date()  # Convert to date
+    # Allow manual date selection without calling .date() since it's already a date object
+    start_date = st.date_input("Select Start Date")
+    end_date = st.date_input("Select End Date")
 
 # API Key input
 openai_api_key = st.text_input("Enter your OpenAI API Key", type="password")
@@ -202,7 +202,7 @@ for i, uploaded_file in enumerate(uploaded_files, start=1):
             elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
                 file_content = read_docx(uploaded_file)
 
-            # Append file content to combined_content
+            # Append file content to combined_content with clear indicators
             combined_content += f"--- Beginning of content from file {i}: {uploaded_file.name} ---\n"
             combined_content += file_content + "\n"
             combined_content += f"--- End of content from file {i}: {uploaded_file.name} ---\n\n"
