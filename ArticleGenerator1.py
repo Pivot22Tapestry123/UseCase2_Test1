@@ -59,7 +59,7 @@ st.markdown(
 )
 
 # Display the company logo in the top left corner
-st.image("/mnt/data/logo.png", width=150, output_format="PNG")
+st.image("assets/logo.png", width=150, output_format="PNG")
 
 # Concise instructions for naming files
 st.write(
