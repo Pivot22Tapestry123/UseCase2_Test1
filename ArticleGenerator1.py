@@ -163,112 +163,114 @@ if st.button("Save Configuration"):
     save_config(st.session_state['prompts'])
     st.success("Configuration saved successfully!")
 
-# Button to start processing
-if st.button("Generate Research Article"):
-    if not uploaded_files:
-        st.error("Please upload at least one transcript file.")
-    elif not openai_api_key:
-        st.error("Please enter your OpenAI API Key.")
-    else:
-        os.environ["OPENAI_API_KEY"] = openai_api_key
-        os.environ["OPENAI_MODEL_NAME"] = 'gpt-4o'
+# Combine the content of all eligible files
+combined_content = ""
 
-        # Process files within the selected date range
-        for uploaded_file in uploaded_files:
-            file_date_str = uploaded_file.name.split("_")[0]
-            try:
-                file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
-                if start_date.date() <= file_date <= end_date.date():
-                    # Read content based on file type
-                    if uploaded_file.type == "text/plain":
-                        file_content = uploaded_file.read().decode("utf-8")
-                    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                        file_content = read_docx(uploaded_file)
+# Process files within the selected date range
+for i, uploaded_file in enumerate(uploaded_files, start=1):
+    file_date_str = uploaded_file.name.split("_")[0]
+    try:
+        file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
+        if start_date.date() <= file_date <= end_date.date():
+            # Read content based on file type
+            if uploaded_file.type == "text/plain":
+                file_content = uploaded_file.read().decode("utf-8")
+            elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                file_content = read_docx(uploaded_file)
 
-                    st.write(f"Processing file: {uploaded_file.name}")
+            # Append filename, beginning marker, content, and end marker to combined_content
+            combined_content += f"--- Beginning of content from file {i}: {uploaded_file.name} ---\n"
+            combined_content += file_content + "\n"
+            combined_content += f"--- End of content from file {i}: {uploaded_file.name} ---\n\n"
 
-                    # Define agents and tasks for processing content
-                    planner = Agent(
-                        role=st.session_state['prompts']['planner']['role'],
-                        goal=st.session_state['prompts']['planner']['goal'],
-                        backstory=st.session_state['prompts']['planner']['backstory'],
-                        allow_delegation=False,
-                        verbose=True,
-                        temperature=temperature
-                    )
+    except ValueError:
+        st.warning(f"The file {uploaded_file.name} does not have a valid date format in the filename. Skipping this file.")
 
-                    # Define a single task for content planning
-                    task = Task(
-                        description=st.session_state['prompts']['tasks']['plan'],
-                        agent=planner,
-                        inputs=[file_content],
-                        expected_output="A comprehensive article based on the provided transcripts."
-                    )
+# Button to view combined content
+if st.button("View Combined Content"):
+    st.text_area("Combined Content Preview", combined_content, height=300)
 
-                    crew = Crew(agents=[planner], tasks=[task], verbose=True)
-                    with st.spinner(f"Processing {uploaded_file.name}..."):
-                        result = crew.kickoff()
+# Ensure combined content is not empty before proceeding
+if combined_content:
+    # Define agents and tasks for processing combined content
+    planner = Agent(
+        role=st.session_state['prompts']['planner']['role'],
+        goal=st.session_state['prompts']['planner']['goal'],
+        backstory=st.session_state['prompts']['planner']['backstory'],
+        allow_delegation=False,
+        verbose=True,
+        temperature=temperature
+    )
 
-                else:
-                    st.write(f"Skipped file (out of date range): {uploaded_file.name}")
-            except ValueError:
-                st.warning(f"The file {uploaded_file.name} does not have a valid date format in the filename. Skipping this file.")
+    # Define a single task for content planning based on the combined content
+    task = Task(
+        description=st.session_state['prompts']['tasks']['plan'],
+        agent=planner,
+        inputs=[combined_content],
+        expected_output="A comprehensive article based on the provided transcripts."
+    )
 
-        # Writer agent for cohesive report
-        writer = Agent(
-            role="Content Writer",
-            goal="Write a cohesive research article based on organized sections.",
-            backstory=st.session_state['prompts']['writer']['backstory'],
-            allow_delegation=False,
-            verbose=True
-        )
+    crew = Crew(agents=[planner], tasks=[task], verbose=True)
+    with st.spinner("Processing all uploaded files for a consolidated report..."):
+        result = crew.kickoff()
 
-        write_task = Task(
-            description=st.session_state['prompts']['tasks']['write'],
-            agent=writer,
-            expected_output="A well-structured and cohesive research article."
-        )
+    # Writer agent for cohesive report generation
+    writer = Agent(
+        role="Content Writer",
+        goal="Write a cohesive research article based on organized sections.",
+        backstory=st.session_state['prompts']['writer']['backstory'],
+        allow_delegation=False,
+        verbose=True
+    )
 
-        writer_crew = Crew(agents=[writer], tasks=[write_task], verbose=True)
-        with st.spinner("Writing the cohesive research article..."):
-            final_report = writer_crew.kickoff()
+    write_task = Task(
+        description=st.session_state['prompts']['tasks']['write'],
+        agent=writer,
+        expected_output="A well-structured and cohesive research article."
+    )
 
-        # Display final report
-        st.success("Research article generated successfully!")
-        st.markdown(final_report)
+    writer_crew = Crew(agents=[writer], tasks=[write_task], verbose=True)
+    with st.spinner("Writing the cohesive research article from combined content..."):
+        final_report = writer_crew.kickoff()
 
-        # Generate Word document with specified formatting
-        doc = Document()
-        
-        # Set document margins to 1 inch
-        doc_sections = doc.sections
-        for section in doc_sections:
-            section.left_margin = section.right_margin = section.top_margin = section.bottom_margin = Pt(72)  # 1 inch margin
+    # Display the final report
+    st.success("Research article generated successfully!")
+    st.markdown(final_report)
 
-        # Add content to the document
-        doc.add_paragraph("Industry Insights Report", style='Heading 1')
-        
-        for line in final_report.split('\n'):
-            clean_line = line.strip('*')  # Remove asterisks from each line
-            p = doc.add_paragraph(clean_line)
-            p.style.font.name = 'Times New Roman'
-            p.style.font.size = Pt(11)
-            p.paragraph_format.alignment = 0  # Left align
-            p.paragraph_format.space_after = Pt(0)
-            p.paragraph_format.line_spacing = 1  # Single line spacing
+    # Generate Word document with specified formatting
+    doc = Document()
+    
+    # Set document margins to 1 inch
+    doc_sections = doc.sections
+    for section in doc_sections:
+        section.left_margin = section.right_margin = section.top_margin = section.bottom_margin = Pt(72)  # 1 inch margin
 
-        # Save document to buffer
-        word_buffer = io.BytesIO()
-        doc.save(word_buffer)
-        word_buffer.seek(0)
+    # Add content to the document
+    doc.add_paragraph("Industry Insights Report", style='Heading 1')
+    
+    for line in final_report.split('\n'):
+        clean_line = line.strip('*')  # Remove asterisks from each line
+        p = doc.add_paragraph(clean_line)
+        p.style.font.name = 'Times New Roman'
+        p.style.font.size = Pt(11)
+        p.paragraph_format.alignment = 0  # Left align
+        p.paragraph_format.space_after = Pt(0)
+        p.paragraph_format.line_spacing = 1  # Single line spacing
 
-        # Download Word document
-        st.download_button(
-            label="Download Word Document",
-            data=word_buffer.getvalue(),
-            file_name="research_article.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
+    # Save document to buffer
+    word_buffer = io.BytesIO()
+    doc.save(word_buffer)
+    word_buffer.seek(0)
+
+    # Download Word document
+    st.download_button(
+        label="Download Word Document",
+        data=word_buffer.getvalue(),
+        file_name="research_article.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+else:
+    st.warning("No eligible content found in the selected date range.")
 
 st.markdown("---")
 st.markdown("Tapestry Networks")
