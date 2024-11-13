@@ -31,10 +31,6 @@ def read_docx(file):
     doc = DocxDocument(file)
     return "\n".join([paragraph.text for paragraph in doc.paragraphs])
 
-# Helper function to remove zero-width spaces
-def remove_zero_width_spaces(text):
-    return text.replace('\u200b', '')  # Remove zero-width spaces
-
 # Load persisted configurations at startup
 config = load_config()
 
@@ -236,8 +232,6 @@ if st.button("Generate Research Article"):
                     st.warning(f"The file {uploaded_file.name} does not have a valid date format in the filename. Skipping this file.")
 
         # Ensure combined content is not empty before proceeding
-        st.session_state['combined_content'] = remove_zero_width_spaces(st.session_state['combined_content']).encode("utf-8").decode("utf-8")
-
         if st.session_state['combined_content']:
             # Define agents and tasks for processing combined content
             planner = Agent(
@@ -279,26 +273,8 @@ if st.button("Generate Research Article"):
             )
 
             writer_crew = Crew(agents=[writer], tasks=[write_task], verbose=True)
-
-            # Calculate minimum and maximum word count for the final report
-            min_word_count = len(st.session_state['combined_content'].split()) * 0.4
-            max_word_count = len(st.session_state['combined_content'].split()) * 0.5
-
-            # Generate report with word count check
             with st.spinner("Writing the cohesive research article from combined content..."):
-                report = writer_crew.kickoff()
-                report_word_count = len(report.split())
-
-                # Re-run generation if the word count is below 40%
-                while report_word_count < min_word_count:
-                    report = writer_crew.kickoff()
-                    report_word_count = len(report.split())
-
-                # Cap the report length at 50%
-                if report_word_count > max_word_count:
-                    report = " ".join(report.split()[:int(max_word_count)])
-
-                st.session_state['final_report'] = remove_zero_width_spaces(report).encode("utf-8").decode("utf-8")
+                st.session_state['final_report'] = writer_crew.kickoff()
 
             # Display the final report
             st.success("Research article generated successfully!")
