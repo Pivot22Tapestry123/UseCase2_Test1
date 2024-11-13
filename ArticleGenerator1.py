@@ -37,6 +37,13 @@ config = load_config()
 # Streamlit UI
 st.title("Research Article Generator")
 
+# Concise instructions for naming files
+st.write(
+    "### File Naming Instructions\n"
+    "Please name your files starting with the date in `YYYY-MM-DD` format, followed by an underscore (`_`).\n"
+    "Example: `2023-06-15_transcript.docx`"
+)
+
 # File uploader to accept both .txt and .docx files
 uploaded_files = st.file_uploader("Upload one or more transcript files (TXT or Word)", type=["txt", "docx"], accept_multiple_files=True)
 
@@ -65,7 +72,7 @@ openai_api_key = st.text_input("Enter your OpenAI API Key", type="password")
 # Temperature slider
 temperature = st.slider("Set the temperature for the output (0 = deterministic, 1 = creative)", min_value=0.0, max_value=1.0, value=0.7)
 
-# Define prompts for agents and tasks, hidden from the front end
+# Define prompts for agents and tasks
 if 'prompts' not in st.session_state:
     st.session_state['prompts'] = config or {
         "planner": {
@@ -131,7 +138,17 @@ if 'prompts' not in st.session_state:
         }
     }
 
-# Task Descriptions UI (excluding agent roles)
+# User inputs for each prompt
+st.header("Agent Prompts")
+
+for agent, prompts in st.session_state['prompts'].items():
+    if agent != "tasks":
+        st.subheader(f"{agent.capitalize()} Agent")
+        prompts["role"] = st.text_input(f"{agent.capitalize()} Role", value=prompts["role"], key=f"{agent}_role")
+        prompts["goal"] = st.text_area(f"{agent.capitalize()} Goal", value=prompts["goal"], key=f"{agent}_goal")
+        prompts["backstory"] = st.text_area(f"{agent.capitalize()} Backstory", value=prompts["backstory"], key=f"{agent}_backstory")
+
+# Task Descriptions UI
 st.header("Task Descriptions")
 for task, description in st.session_state['prompts']["tasks"].items():
     st.session_state['prompts']["tasks"][task] = st.text_area(f"{task.capitalize()} Task Description", value=description, key=f"{task}_description")
