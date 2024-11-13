@@ -164,13 +164,13 @@ if st.button("Generate Research Article"):
                         task = Task(
                             description=st.session_state['prompts']['tasks']['plan'],
                             agent=planner,
-                            inputs=[file_content],
+                            inputs=[file_content],  # Assuming `Task` can accept `inputs` directly here
                             expected_output=f"A comprehensive '{section_name}' section."
                         )
 
                         crew = Crew(agents=[planner], tasks=[task], verbose=True)
                         with st.spinner(f"Extracting '{section_name}' from {uploaded_file.name}..."):
-                            result = crew.kickoff(inputs={"transcripts": file_content})
+                            result = crew.kickoff()  # Removed `inputs` parameter from kickoff
 
                 else:
                     st.write(f"Skipped file (out of date range): {uploaded_file.name}")
