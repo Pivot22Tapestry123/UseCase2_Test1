@@ -171,7 +171,7 @@ for i, uploaded_file in enumerate(uploaded_files, start=1):
     file_date_str = uploaded_file.name.split("_")[0]
     try:
         file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
-        if start_date.date() <= file_date <= end_date.date():
+        if start_date <= file_date <= end_date:
             # Read content based on file type
             if uploaded_file.type == "text/plain":
                 file_content = uploaded_file.read().decode("utf-8")
