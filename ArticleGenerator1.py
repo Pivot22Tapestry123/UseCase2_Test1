@@ -72,6 +72,9 @@ openai_api_key = st.text_input("Enter your OpenAI API Key", type="password")
 # Temperature slider
 temperature = st.slider("Set the temperature for the output (0 = deterministic, 1 = creative)", min_value=0.0, max_value=1.0, value=0.7)
 
+# Toggle for selecting Standard or Custom Prompts
+prompt_mode = st.radio("Select Prompt Mode", ["Standard Prompts", "Custom Prompts"])
+
 # Define prompts for agents and tasks
 if 'prompts' not in st.session_state:
     st.session_state['prompts'] = config or {
@@ -138,20 +141,22 @@ if 'prompts' not in st.session_state:
         }
     }
 
-# User inputs for each prompt
+# User inputs for each prompt based on mode
 st.header("Agent Prompts")
+
+is_editable = prompt_mode == "Custom Prompts"
 
 for agent, prompts in st.session_state['prompts'].items():
     if agent != "tasks":
         st.subheader(f"{agent.capitalize()} Agent")
-        prompts["role"] = st.text_input(f"{agent.capitalize()} Role", value=prompts["role"], key=f"{agent}_role")
-        prompts["goal"] = st.text_area(f"{agent.capitalize()} Goal", value=prompts["goal"], key=f"{agent}_goal")
-        prompts["backstory"] = st.text_area(f"{agent.capitalize()} Backstory", value=prompts["backstory"], key=f"{agent}_backstory")
+        prompts["role"] = st.text_input(f"{agent.capitalize()} Role", value=prompts["role"], key=f"{agent}_role", disabled=not is_editable)
+        prompts["goal"] = st.text_area(f"{agent.capitalize()} Goal", value=prompts["goal"], key=f"{agent}_goal", disabled=not is_editable)
+        prompts["backstory"] = st.text_area(f"{agent.capitalize()} Backstory", value=prompts["backstory"], key=f"{agent}_backstory", disabled=not is_editable)
 
 # Task Descriptions UI
 st.header("Task Descriptions")
 for task, description in st.session_state['prompts']["tasks"].items():
-    st.session_state['prompts']["tasks"][task] = st.text_area(f"{task.capitalize()} Task Description", value=description, key=f"{task}_description")
+    st.session_state['prompts']["tasks"][task] = st.text_area(f"{task.capitalize()} Task Description", value=description, key=f"{task}_description", disabled=not is_editable)
 
 # Button to save user modifications
 if st.button("Save Configuration"):
