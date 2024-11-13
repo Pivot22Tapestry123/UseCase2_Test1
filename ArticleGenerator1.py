@@ -187,6 +187,12 @@ if st.button("Save Configuration"):
     save_config(st.session_state['prompts'])
     st.success("Configuration saved successfully!")
 
+# Initialize session state variables for combined content and final report
+if 'combined_content' not in st.session_state:
+    st.session_state['combined_content'] = ""
+if 'final_report' not in st.session_state:
+    st.session_state['final_report'] = ""
+
 # Button to start processing
 if st.button("Generate Research Article"):
     if not uploaded_files:
@@ -197,7 +203,7 @@ if st.button("Generate Research Article"):
         os.environ["OPENAI_API_KEY"] = openai_api_key
 
         # Process files within the selected date range
-        combined_content = ""
+        st.session_state['combined_content'] = ""
         for i, uploaded_file in enumerate(uploaded_files, 1):
             file_date_str = uploaded_file.name.split("_")[0]
             try:
@@ -210,19 +216,15 @@ if st.button("Generate Research Article"):
                         file_content = read_docx(uploaded_file)
 
                     # Append file content to combined_content with clear indicators
-                    combined_content += f"--- Beginning of content from file {i}: {uploaded_file.name} ---\n"
-                    combined_content += file_content + "\n"
-                    combined_content += f"--- End of content from file {i}: {uploaded_file.name} ---\n\n"
+                    st.session_state['combined_content'] += f"--- Beginning of content from file {i}: {uploaded_file.name} ---\n"
+                    st.session_state['combined_content'] += file_content + "\n"
+                    st.session_state['combined_content'] += f"--- End of content from file {i}: {uploaded_file.name} ---\n\n"
 
             except ValueError:
                 st.warning(f"The file {uploaded_file.name} does not have a valid date format in the filename. Skipping this file.")
 
-        # Button to view combined content
-        if st.button("View Combined Content"):
-            st.text_area("Combined Content Preview", combined_content, height=300)
-
         # Ensure combined content is not empty before proceeding
-        if combined_content:
+        if st.session_state['combined_content']:
             # Define agents and tasks for processing combined content
             planner = Agent(
                 role=st.session_state['prompts']['planner']['role'],
@@ -238,7 +240,7 @@ if st.button("Generate Research Article"):
             task = Task(
                 description=st.session_state['prompts']['tasks']['plan'],
                 agent=planner,
-                inputs=[combined_content],
+                inputs=[st.session_state['combined_content']],
                 expected_output="A comprehensive article based on the provided transcripts."
             )
 
@@ -264,46 +266,54 @@ if st.button("Generate Research Article"):
 
             writer_crew = Crew(agents=[writer], tasks=[write_task], verbose=True)
             with st.spinner("Writing the cohesive research article from combined content..."):
-                final_report = writer_crew.kickoff()
+                st.session_state['final_report'] = writer_crew.kickoff()
 
             # Display the final report
             st.success("Research article generated successfully!")
-            st.markdown(final_report)
+            st.markdown(st.session_state['final_report'])
 
-            # Generate Word document with specified formatting
-            doc = Document()
-            
-            # Set document margins to 1 inch
-            doc_sections = doc.sections
-            for section in doc_sections:
-                section.left_margin = section.right_margin = section.top_margin = section.bottom_margin = Pt(72)  # 1 inch margin
+# Buttons to download the combined content and final report
+if st.session_state['combined_content']:
+    combined_buffer = io.StringIO(st.session_state['combined_content'])
+    st.download_button(
+        label="Download Combined Content",
+        data=combined_buffer.getvalue(),
+        file_name="combined_content.txt",
+        mime="text/plain"
+    )
 
-            # Add content to the document
-            doc.add_paragraph("Industry Insights Report", style='Heading 1')
-            
-            for line in final_report.split('\n'):
-                clean_line = line.strip('*')  # Remove asterisks from each line
-                p = doc.add_paragraph(clean_line)
-                p.style.font.name = 'Times New Roman'
-                p.style.font.size = Pt(11)
-                p.paragraph_format.alignment = 0  # Left align
-                p.paragraph_format.space_after = Pt(0)
-                p.paragraph_format.line_spacing = 1  # Single line spacing
+if st.session_state['final_report']:
+    # Generate Word document with specified formatting
+    doc = Document()
+    doc.add_paragraph("Industry Insights Report", style='Heading 1')
+    
+    for line in st.session_state['final_report'].split('\n'):
+        clean_line = line.strip('*')  # Remove asterisks from each line
+        p = doc.add_paragraph(clean_line)
+        p.style.font.name = 'Times New Roman'
+        p.style.font.size = Pt(11)
+        p.paragraph_format.alignment = 0  # Left align
+        p.paragraph_format.space_after = Pt(0)
+        p.paragraph_format.line_spacing = 1  # Single line spacing
 
-            # Save document to buffer
-            word_buffer = io.BytesIO()
-            doc.save(word_buffer)
-            word_buffer.seek(0)
+    # Save document to buffer
+    word_buffer = io.BytesIO()
+    doc.save(word_buffer)
+    word_buffer.seek(0)
 
-            # Download Word document
-            st.download_button(
-                label="Download Word Document",
-                data=word_buffer.getvalue(),
-                file_name="research_article.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
-        else:
-            st.warning("No eligible content found in the selected date range.")
+    # Download button for final report
+    st.download_button(
+        label="Download Final Report",
+        data=word_buffer.getvalue(),
+        file_name="research_article.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+
+# Reset button
+if st.button("Reset"):
+    st.session_state['combined_content'] = ""
+    st.session_state['final_report'] = ""
+    st.experimental_rerun()
 
 st.markdown("---")
 st.markdown("Tapestry Networks")
