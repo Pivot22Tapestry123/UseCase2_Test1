@@ -31,6 +31,10 @@ def read_docx(file):
     doc = DocxDocument(file)
     return "\n".join([paragraph.text for paragraph in doc.paragraphs])
 
+# Helper function to remove zero-width spaces
+def remove_zero_width_spaces(text):
+    return text.replace('\u200b', '')  # Remove zero-width spaces
+
 # Load persisted configurations at startup
 config = load_config()
 
@@ -232,6 +236,8 @@ if st.button("Generate Research Article"):
                     st.warning(f"The file {uploaded_file.name} does not have a valid date format in the filename. Skipping this file.")
 
         # Ensure combined content is not empty before proceeding
+        st.session_state['combined_content'] = remove_zero_width_spaces(st.session_state['combined_content']).encode("utf-8").decode("utf-8")
+
         if st.session_state['combined_content']:
             # Define agents and tasks for processing combined content
             planner = Agent(
@@ -292,7 +298,7 @@ if st.button("Generate Research Article"):
                 if report_word_count > max_word_count:
                     report = " ".join(report.split()[:int(max_word_count)])
 
-                st.session_state['final_report'] = report
+                st.session_state['final_report'] = remove_zero_width_spaces(report).encode("utf-8").decode("utf-8")
 
             # Display the final report
             st.success("Research article generated successfully!")
