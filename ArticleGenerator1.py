@@ -76,17 +76,12 @@ if uploaded_files:
     file_names = [file.name for file in uploaded_files]
     st.write("Uploaded Files:", ", ".join(file_names))
 
-# Checkbox to include all documents by automatically setting the date range
+# Checkbox to include all documents without date range check
 include_all_docs = st.checkbox("Include all documents")
 
 # Date range selectors
-if include_all_docs:
-    # Automatically set date range to 100 years before today to today
-    start_date = (datetime.now() - timedelta(days=365 * 100)).date()  # Convert to date
-    end_date = datetime.now().date()  # Convert to date
-    st.write(f"Automatically including documents from {start_date} to {end_date}")
-else:
-    # Allow manual date selection without calling .date() since it's already a date object
+if not include_all_docs:
+    # Allow manual date selection for date filtering
     start_date = st.date_input("Select Start Date")
     end_date = st.date_input("Select End Date")
 
@@ -113,7 +108,7 @@ if 'prompts' not in st.session_state:
                 "from relevant companies where applicable. Only use the data mentioned in the eligible files "
                 "for report generation and do not incorporate any outside knowledge. "
                 "Ensure the report reads naturally and has the polished "
-                "feel of a human-written document, with varied sentence structures, a professional tone, and engaging, nuanced language."
+                "feel of a human-written document, with varied sentence structures, a professional tone, and engaging, nuanced language. Ensure that the generated report is based on the transcripts provided"
             )
         },
         "writer": {
@@ -130,7 +125,7 @@ if 'prompts' not in st.session_state:
                 "writer. Avoid robotic language and ensure the narrative is engaging, relatable, and enriched with "
                 "cross-references that connect different sections of the report for a cohesive flow. "
                 "End the article with a final 'Conclusion' section, which summarizes key insights without adding further suggestions or recommendations. "
-                "Only use the data mentioned in the eligible files for report generation and do not incorporate any outside knowledge."
+                "Only use the data mentioned in the eligible files for report generation and do not incorporate any outside knowledge. Ensure that the generated report is based on the transcripts provided"
             )
         },
         "editor": {
@@ -144,7 +139,7 @@ if 'prompts' not in st.session_state:
                 "Focus on coherence, readability, and the logical flow of ideas. Make sure there is no content or "
                 "additional sections following the Conclusion. The Conclusion should be the final part of the report, "
                 "summarizing key insights without adding any further recommendations or suggestions. "
-                "Only use the data mentioned in the eligible files for report generation and do not incorporate any outside knowledge."
+                "Only use the data mentioned in the eligible files for report generation and do not incorporate any outside knowledge. Ensure that the generated report is based on the transcripts provided"
             )
         },
         "tasks": {
@@ -202,13 +197,15 @@ if st.button("Generate Research Article"):
     else:
         os.environ["OPENAI_API_KEY"] = openai_api_key
 
-        # Process files within the selected date range
+        # Process files based on the inclusion mode
         st.session_state['combined_content'] = ""
         for i, uploaded_file in enumerate(uploaded_files, 1):
             file_date_str = uploaded_file.name.split("_")[0]
             try:
                 file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
-                if start_date <= file_date <= end_date:
+
+                # Only check date range if 'Include all documents' is not selected
+                if include_all_docs or (start_date <= file_date <= end_date):
                     # Read content based on file type
                     if uploaded_file.type == "text/plain":
                         file_content = uploaded_file.read().decode("utf-8")
@@ -219,9 +216,20 @@ if st.button("Generate Research Article"):
                     st.session_state['combined_content'] += f"--- Beginning of content from file {i}: {uploaded_file.name} ---\n"
                     st.session_state['combined_content'] += file_content + "\n"
                     st.session_state['combined_content'] += f"--- End of content from file {i}: {uploaded_file.name} ---\n\n"
-
             except ValueError:
-                st.warning(f"The file {uploaded_file.name} does not have a valid date format in the filename. Skipping this file.")
+                if include_all_docs:
+                    # If "Include all documents" is selected, skip date validation errors
+                    if uploaded_file.type == "text/plain":
+                        file_content = uploaded_file.read().decode("utf-8")
+                    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                        file_content = read_docx(uploaded_file)
+
+                    # Append file content without checking date range
+                    st.session_state['combined_content'] += f"--- Beginning of content from file {i}: {uploaded_file.name} ---\n"
+                    st.session_state['combined_content'] += file_content + "\n"
+                    st.session_state['combined_content'] += f"--- End of content from file {i}: {uploaded_file.name} ---\n\n"
+                else:
+                    st.warning(f"The file {uploaded_file.name} does not have a valid date format in the filename. Skipping this file.")
 
         # Ensure combined content is not empty before proceeding
         if st.session_state['combined_content']:
@@ -308,12 +316,6 @@ if st.session_state['final_report']:
         file_name="research_article.docx",
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )
-
-# Reset button
-if st.button("Reset"):
-    st.session_state['combined_content'] = ""
-    st.session_state['final_report'] = ""
-    st.experimental_rerun()
 
 st.markdown("---")
 st.markdown("Tapestry Networks")
