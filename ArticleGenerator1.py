@@ -37,6 +37,30 @@ config = load_config()
 # Streamlit UI
 st.title("Research Article Generator")
 
+# Apply custom CSS for background color and logo position
+st.markdown(
+    """
+    <style>
+    body {
+        background-color: black;
+        color: white;  /* Set text color to white for better visibility on black background */
+    }
+    .css-18e3th9 {
+        padding-top: 0rem;
+    }
+    .logo {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Display the company logo in the top left corner
+st.image("/mnt/data/logo.png", width=150, output_format="PNG")
+
 # Concise instructions for naming files
 st.write(
     "### File Naming Instructions\n"
@@ -58,13 +82,13 @@ include_all_docs = st.checkbox("Include all documents")
 # Date range selectors
 if include_all_docs:
     # Automatically set date range to 100 years before today to today
-    start_date = datetime.now() - timedelta(days=365 * 100)
-    end_date = datetime.now()
-    st.write(f"Automatically including documents from {start_date.date()} to {end_date.date()}")
+    start_date = (datetime.now() - timedelta(days=365 * 100)).date()  # Convert to date
+    end_date = datetime.now().date()  # Convert to date
+    st.write(f"Automatically including documents from {start_date} to {end_date}")
 else:
     # Allow manual date selection
-    start_date = st.date_input("Select Start Date")
-    end_date = st.date_input("Select End Date")
+    start_date = st.date_input("Select Start Date").date()  # Convert to date
+    end_date = st.date_input("Select End Date").date()  # Convert to date
 
 # API Key input
 openai_api_key = st.text_input("Enter your OpenAI API Key", type="password")
@@ -170,7 +194,7 @@ combined_content = ""
 for i, uploaded_file in enumerate(uploaded_files, start=1):
     file_date_str = uploaded_file.name.split("_")[0]
     try:
-        file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()
+        file_date = datetime.strptime(file_date_str, "%Y-%m-%d").date()  # Convert to date
         if start_date <= file_date <= end_date:
             # Read content based on file type
             if uploaded_file.type == "text/plain":
@@ -178,7 +202,7 @@ for i, uploaded_file in enumerate(uploaded_files, start=1):
             elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
                 file_content = read_docx(uploaded_file)
 
-            # Append filename, beginning marker, content, and end marker to combined_content
+            # Append file content to combined_content
             combined_content += f"--- Beginning of content from file {i}: {uploaded_file.name} ---\n"
             combined_content += file_content + "\n"
             combined_content += f"--- End of content from file {i}: {uploaded_file.name} ---\n\n"
@@ -199,7 +223,8 @@ if combined_content:
         backstory=st.session_state['prompts']['planner']['backstory'],
         allow_delegation=False,
         verbose=True,
-        temperature=temperature
+        temperature=temperature,
+        openai_api_key=openai_api_key  # Pass API key directly
     )
 
     # Define a single task for content planning based on the combined content
